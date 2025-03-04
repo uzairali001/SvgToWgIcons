@@ -38,18 +38,17 @@ await ProcessSvgFiles(sourceDir, outputDir);
 
 return 0;
 
-
-
 static async Task ProcessSvgFiles(string sourceDir, string outputDir)
 {
     Console.WriteLine($"Processing SVG files from {sourceDir} to {outputDir}");
 
     Stopwatch stopwatch = Stopwatch.StartNew();
+    int totalFiles = 0;
 
     var directories = Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories).ToList();
     if (directories.Count == 0)
     {
-        await ProcessFolder(sourceDir, outputDir);
+        totalFiles = await ProcessFolder(sourceDir, outputDir);
     }
     else
     {
@@ -59,20 +58,22 @@ static async Task ProcessSvgFiles(string sourceDir, string outputDir)
             string dest = Path.Combine(outputDir, subDirectory);
 
             Console.Write($"{subDirectory}: ");
-            await ProcessFolder(directory, dest);
+            int files = await ProcessFolder(directory, dest);
+            totalFiles += files;
         }
     }
     stopwatch.Stop();
 
-    Console.WriteLine($"Took {stopwatch.Elapsed.TotalSeconds}s");
+    Console.WriteLine($"Took {stopwatch.Elapsed.TotalSeconds}s, total {totalFiles} files processed");
 }
 
-static async Task ProcessFolder(string source, string output)
+static async Task<int> ProcessFolder(string source, string output)
 {
     var files = Directory.EnumerateFiles(source, "*.svg", SearchOption.TopDirectoryOnly);
     Directory.CreateDirectory(output);
     using StreamWriter? indexWriter = new(new FileStream(Path.Combine(output, "index.js"), FileMode.Create, FileAccess.Write));
     using StreamWriter? typeWriter = new(new FileStream(Path.Combine(output, "index.d.ts"), FileMode.Create, FileAccess.Write));
+
 
     Console.WriteLine($"Processing {files.Count()} Files");
     typeWriter.WriteLine("import WgIconDefinition from \"../WgIconDefinition\";");
@@ -83,9 +84,11 @@ static async Task ProcessFolder(string source, string output)
         string iconName = Path.GetFileNameWithoutExtension(file);
         string componentString = GetComponentString(iconName, svgContent);
 
-        indexWriter.WriteLine(componentString);
-        typeWriter.WriteLine($"export const Wgi{iconName.ToPascalCase()}: WgIconDefinition;");
+        await indexWriter.WriteLineAsync(componentString);
+        await typeWriter.WriteLineAsync($"export const Wgi{iconName.ToPascalCase()}: WgIconDefinition;");
     }
+
+    return files.Count();
 }
 
 
